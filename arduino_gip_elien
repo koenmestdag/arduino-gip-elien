@@ -1,0 +1,197 @@
+/**
+ * GIP van Elien Mestdag
+ * 
+ * Meting van:
+ *    - CO
+ *          A0  > A2
+ *          D0  > /
+ *          GND > GND
+ *          VCC > +5V
+ *    - temperatuur
+ *          DAT > A1
+ *          GND > GND
+ *          VCC > +5V
+ *    
+ */
+
+// LCD
+#include <LiquidCrystal.h> // LCD library
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7); // select the pins used on the LCD panel
+// define some values used by the panel and buttons
+int lcd_key     = 0;
+int adc_key_in  = 0;
+#define btnRIGHT  0
+#define btnUP     1
+#define btnDOWN   2
+#define btnLEFT   3
+#define btnSELECT 4
+#define btnNONE   5
+
+// CO
+#include "MQ7.h" // CO library
+const int ANALOG_SENSOR_PIN = A2;// port CO sensor connects to
+MQ7 mq(ANALOG_SENSOR_PIN, 5.0);  // param[1] : Analog pin number, param[2] : Sensor Vcc value
+
+// Temperature DHT 22
+#include "DHT.h" // temperature library
+#define DHTPIN 3     // what pin we're connected to
+#define DHTTYPE DHT22   // DHT 22  (AM2302)
+DHT dht(DHTPIN, DHTTYPE); // Initialize DHT sensor for normal 16mhz Arduino
+float h; // humidity
+
+void setup()
+{
+  // Synch with computer
+  Serial.begin(57600);
+  dht.begin(); //  startup temp sensor
+
+  lcd.begin(16, 2);              // start the library
+  lcd.setCursor(0,0); // first line
+  lcd.print(appendSpaces("GIP Elien", 16));
+  lcd.setCursor(0,1); // second line
+  lcd.print(appendSpaces("2019-2020", 16));
+
+  Serial.println("started - displaying...");
+  delay(2000);
+  Serial.println("started");
+}
+
+void loop()
+{
+ lcd.setCursor(0, 0);            // display seconds since startup
+ lcd.print("s");
+ lcd.setCursor(1, 0);
+ lcd.print(appendSpaces(String(millis()/1000), 9));
+
+ lcd.setCursor(0,1);            // move to the begining of the second line
+ lcd_key = read_LCD_buttons();  // read the buttons
+
+/* The following 2 lines will print the actual threshold voltage present at analog input 0 ; As these buttons are part of a voltage divider, pressing each button creates a different threshold voltage
+     Serial.print(adc_key_in);
+     Serial.println(" v");
+*/
+
+ switch (lcd_key)               // depending on which button was pushed, we perform an action
+ {
+   case btnRIGHT:
+     {
+     lcd.print("RIGHT ");
+     Serial.println("R");
+     break;
+     }
+   case btnLEFT:
+     {
+     lcd.print(appendSpaces("LEFT", 16));
+     Serial.println("L");
+     break;
+     }
+   case btnUP:
+     {
+     lcd.print(appendSpaces("UP", 16));
+     Serial.println("UP");
+     break;
+     }
+   case btnDOWN:
+     {
+     lcd.print(appendSpaces("DOWN", 16));
+     Serial.println("DOWN");
+     break;
+     }
+   case btnSELECT:
+     {
+     lcd.print(appendSpaces("SELECT", 16));
+     Serial.println("SELECT");
+     break;
+     }
+   case btnNONE:
+     {
+     float ppmCO = measurePpmCO();
+     float t = measureTemp();
+     lcd.print(appendSpaces("CO" + String(ppmCO) + " t" + String(t), 16));
+     lcd.setCursor(10, 0);
+     lcd.print(appendSpaces("H" + String(h), 11));
+     break;
+     }
+ }
+ delay(100);
+}
+
+/** Returns measured ppm CO */
+float measurePpmCO() {
+   // To find the ppm
+   float ppm = mq.getPPM();
+   Serial.println("CO" + String(ppm));
+   return ppm;
+}
+
+float measureTemp() {
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  h = dht.readHumidity();
+  // Read temperature as Celsius
+  float t = dht.readTemperature();
+  // Read temperature as Fahrenheit
+  float f = dht.readTemperature(true);
+  
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t) || isnan(f)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return -1.0;
+  }
+
+  // Compute heat index
+  // Must send in temp in Fahrenheit!
+  float hi = dht.computeHeatIndex(f, h);
+
+  Serial.print("Humidity: "); 
+  Serial.print(h);
+  Serial.print(" %\t");
+  Serial.print("Temperature: "); 
+  Serial.print(t);
+  Serial.print(" *C ");
+  Serial.print(f);
+  Serial.print(" *F\t");
+  Serial.print("Heat index: ");
+  Serial.print(hi);
+  Serial.println(" *F");
+
+  return t;
+}
+
+/* Returns string of length len, by appending spaces to the right */
+String appendSpaces(String text, int len) {
+  String iText = text;
+  if(iText.length() > len) {
+    iText = iText.substring(1, 17);
+  }
+  while (iText.length() < len) {
+    iText.concat(" ");
+  };
+  return iText;
+}
+
+// read the buttons
+int read_LCD_buttons()
+{
+  adc_key_in = analogRead(0);      // read the value from the sensor 
+  
+  // my buttons when read are centered at these valies: 0, 144, 329, 504, 741
+  // we add approx 50 to those values and check to see if we are close
+  if (adc_key_in > 1000) return btnNONE; // We make this the 1st option for speed reasons since it will be the most likely result
+  /*/ For V1.1 us this threshold
+  if (adc_key_in < 50)   return btnRIGHT;  
+  if (adc_key_in < 250)  return btnUP; 
+  if (adc_key_in < 450)  return btnDOWN; 
+  if (adc_key_in < 650)  return btnLEFT; 
+  if (adc_key_in < 850)  return btnSELECT;  
+  */
+  // For V1.0 comment the other threshold and use the one below:
+  //
+  if (adc_key_in < 50)   return btnRIGHT;  
+  if (adc_key_in < 195)  return btnUP; 
+  if (adc_key_in < 380)  return btnDOWN; 
+  if (adc_key_in < 555)  return btnLEFT; 
+  if (adc_key_in < 790)  return btnSELECT;   
+  
+  return btnNONE;  // when all others fail, return this...
+}
