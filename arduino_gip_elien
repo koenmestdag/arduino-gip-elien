@@ -1,13 +1,13 @@
 /**
  * GIP van Elien Mestdag
  * 
- * Meting van:
+ * Measurement of:
  *    - CO
  *          A0  > A2
  *          D0  > /
  *          GND > GND
  *          VCC > +5V
- *    - temperatuur
+ *    - temperature & humidity
  *          DAT > A1
  *          GND > GND
  *          VCC > +5V
